@@ -8,6 +8,5 @@
         public string? IssuedByAuthority { get; set; }
         public DateTime ExpiryDate { get; set; }
         public DateTime IssuedDate { get; set; }
-        public virtual Customer? Customer { get; set; }
     }
 }

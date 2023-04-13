@@ -1,3 +1,4 @@
+using LabOOP2;
 using LabOOP2.Models;
 using Microsoft.EntityFrameworkCore;
 
@@ -10,9 +11,9 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddDbContext<Context>(option => option.UseSqlServer(
-    builder.Configuration.GetConnectionString("DefaultConnection")
-)); 
-
+    "Server=SCAT\\SQLEXPRESS; Database=fastHroshi; Trusted_Connection=True;MultipleActiveResultSets=true;trustServerCertificate=true"
+));
+builder.Services.AddAutoMapper(typeof(CustomerProfile));
 var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
