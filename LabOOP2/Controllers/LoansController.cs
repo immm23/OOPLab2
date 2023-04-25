@@ -1,9 +1,9 @@
-﻿using LabOOP2.Models;
-using Microsoft.AspNetCore.Components.Forms;
-using Microsoft.AspNetCore.Http;
+﻿using LabOOP2.DAL;
+using LabOOP2.Domain;
+using LabOOP2.Domain.Services;
+using LabOOP2.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.Runtime.CompilerServices;
 
 namespace LabOOP2.Controllers
 {
@@ -12,88 +12,82 @@ namespace LabOOP2.Controllers
     public class LoansController : ControllerBase
     {
         private readonly Context _context;
+        private readonly ILoanRandomizer _loanRandomizer;
 
-        public LoansController(Context context)
+        public LoansController(Context context,
+            ILoanRandomizer loanRandomizer)
         {
             _context = context;
+            _loanRandomizer = loanRandomizer;
         }
 
-        [HttpGet("loans")]
-        public Loan[] GetLoans()
+        [HttpGet("customer/{id}/loans")]
+        public IActionResult GetLoans(Guid id)
         {
-            return _context.Loans.Include(p => p.Customer)
-                .ToArray();
+            var customer = _context.Customers.Where(p => p.Id == id)
+               .Include(p => p.Loans)
+               .FirstOrDefault();
+
+            if (customer is null)
+            {
+                return NotFound();
+            }
+
+            return Ok(customer.Loans.ToArray());
         }
 
-        [HttpPost("customer/{id}/loans/new")]
-        public IActionResult Create(int id, decimal amount)
+        [HttpPost("customer/{id}/loans")]
+        public IActionResult Create(Guid id, decimal amount)
         {
-            var dbCustomer = _context.Customers.Where(p => p.Id == id)
+            var customer = _context.Customers.Where(p => p.Id == id)
                .Include(p => p.Passport)
                .Include(p => p.BankAccount)
                .FirstOrDefault();
 
-            if (dbCustomer is null)
+            if (customer is null)
             {
                 return NotFound();
             }
-            else if (dbCustomer.BankAccount is null || dbCustomer.Passport is null)
+
+            try
             {
-                return BadRequest();
+                customer.TakeLoan(amount, _loanRandomizer);
+
+                _context.SaveChanges();
+                return Created(nameof(Create), null);
             }
-
-            Random random = new Random();
-            var percentage = random.Next(0, 250);
-            var length = random.Next(1, 12);
-
-            Loan loan = new Loan()
+            catch(Exception exception)
             {
-                Amount = amount,
-                FromDate = DateTime.Now.Date,
-                TillDate = DateTime.Now.AddMonths(length).Date,
-                Percentage = percentage,
-                FinalSum = amount * (decimal)Math.Pow(1 + percentage / 100, length),
-            };
-            Transaction transaction = new()
-            {
-                Amount = amount,
-                FromDescription = "From Loan",
-                ToDescription = "To Acount Balance",
-                Time = DateTime.Now
-            };
-
-            dbCustomer.Loans.Add(loan);
-            dbCustomer.Balance += amount;
-            dbCustomer.Transactions.Add(transaction);
-            _context.SaveChanges();
-            return Created(nameof(Create), loan);
+                return BadRequest(exception.Message);
+            }
         }
 
-        [HttpPost("customers/{customerId}/loans/{loanId}/payoff")]
-        public IActionResult PayOff(int customerId, int loanId, decimal amount)
+        [HttpPost("customers/{customerId}/loans/{loanId}")]
+        public IActionResult PayOff(Guid customerId, Guid loanId, decimal amount)
         {
-            var dbCustomer = _context.Customers.Where(p => p.Id == customerId)
-               .Include(p => p.Passport)
+            var customer = _context.Customers.Where(p => p.Id == customerId)
+                .Include(p => p.Loans)
                .FirstOrDefault();
-            var dbLoan = _context.Loans.Where(p => p.Id == loanId)
-               .FirstOrDefault();
-            if (dbCustomer is null || dbLoan is null)
+
+            if (customer is null)
             {
                 return NotFound();
             }
 
-            dbLoan.PayedOff += amount;
-            dbCustomer.Balance -= amount;
-            Transaction transaction = new()
+            try
             {
-                Amount = amount,
-                FromDescription = "From Balance",
-                ToDescription = "To Loan",
-                Time = DateTime.Now
-            };
-            dbCustomer.Transactions.Add(transaction);
-            _context.SaveChanges();
-            return Ok();
+                customer.PayOffLoan(customerId, amount);
+                _context.SaveChanges();
+                return Ok();
+            }
+            catch(ArgumentNullException)
+            {
+                return NotFound();
+            }
+            catch(Exception exception)
+            {
+                return BadRequest(exception.Message);
+            }
         }
     }
 }

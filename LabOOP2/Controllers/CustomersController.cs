@@ -1,6 +1,7 @@
-﻿using AutoMapper;
+﻿using LabOOP2.DAL;
+using LabOOP2.Domain;
+using LabOOP2.Domain.Services;
 using LabOOP2.Models;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -11,15 +12,16 @@ namespace LabOOP2.Controllers
     public class CustomersController : ControllerBase
     {
         private readonly Context _context;
-        private readonly IMapper _mapper;
+        private readonly IPaymentService _paymentService;
 
-        public CustomersController(Context context, IMapper mapper)
+        public CustomersController(Context context,
+            IPaymentService service)
         {
             _context = context;
-            _mapper = mapper;
+            _paymentService = service;
         }
 
-        [HttpGet()]
+        [HttpGet]
         public Customer[] GetCustomers()
         {
             return _context.Customers
@@ -31,7 +33,7 @@ namespace LabOOP2.Controllers
         }
 
         [HttpGet("{id}")]
-        public IActionResult GetCustomer(int id)
+        public IActionResult GetCustomer(Guid id)
         {
             var dbCustomer = _context.Customers.Where(p => p.Id == id)
                 .Include(p => p.Transactions)
@@ -48,78 +50,80 @@ namespace LabOOP2.Controllers
             return Ok(dbCustomer);
         }
 
-        [HttpPost("new")]
+        [HttpPost]
         public IActionResult Create(CustomerInputModel customerInput)
         {
-            var customer = _mapper.Map<Customer>(customerInput);
+            var customer = new Customer(
+                Guid.NewGuid(),
+                customerInput.Name,
+                customerInput.Surname,
+                customerInput.Address);
+
             _context.Add(customer);
             _context.SaveChanges();
             return Ok();
         }
 
-        [HttpPut("update")]
+        [HttpPut]
         public IActionResult Update(CustomerInputModel customerInput)
         {
-            var customer = _mapper.Map<Customer>(customerInput);
+            var customer = new Customer(
+                customerInput.Id,
+                customerInput.Name,
+                customerInput.Surname,
+                customerInput.Address);
+
             var dbCustomer = _context.Customers.Where(p => p.Id == customer.Id)
                 .FirstOrDefault();
             if(dbCustomer is null)
             {
                 return NotFound();
             }
-            _context.Entry<Customer>(dbCustomer).State = EntityState.Detached;
+            _context.Entry(dbCustomer).State = EntityState.Detached;
 
             _context.Update(customer);
             _context.SaveChanges();
             return Ok();
         }
 
-        [HttpDelete("{id}/delete")]
-        public IActionResult Delete(int id)
+        [HttpDelete("{id}")]
+        public IActionResult Delete(Guid id)
         {
-            var dbCustomer = _context.Customers.Where(p => p.Id == id)
+            var customer = _context.Customers.Where(p => p.Id == id)
                 .FirstOrDefault();
 
-            if (dbCustomer is null)
+            if (customer is null)
             {
                 return NotFound();
             }
 
-            _context.Remove(dbCustomer);
+            _context.Remove(customer);
             _context.SaveChanges();
             return Ok();
         }
 
-        [HttpPost("{id}/balance/move")]
-        public IActionResult MoveBalance(int id, decimal amount)
+        [HttpPost("{id}/balance")]
+        public IActionResult MoveBalance(Guid id, decimal amount)
         {
-            var dbCustomer = _context.Customers.Where(p => p.Id == id)
+            var customer = _context.Customers.Where(p => p.Id == id)
                 .FirstOrDefault();
 
-            if (dbCustomer is null || dbCustomer.BankAccount is null)
+            if (customer is null)
             {
                 return NotFound();
             }
-            else if (dbCustomer.Balance >= amount)
+
+            try
             {
-                return BadRequest();
+                customer.MoveBalance(amount, _paymentService);
+                _context.SaveChanges();
+
+                return Ok();
             }
-
-            Transaction transaction = new()
+            catch(Exception exception)
             {
-                Amount = amount,
-                FromDescription = "From Balance",
-                ToDescription = "To Bank Acount",
-                Time = DateTime.Now
-            };
-            dbCustomer.Balance -= amount;
-            dbCustomer.Transactions.Add(transaction);
-
-            //sending money to real bank acount
-
-            _context.SaveChanges();
-
-            return Ok();
+                return BadRequest(exception.Message);
+            }
         }
     }
 }

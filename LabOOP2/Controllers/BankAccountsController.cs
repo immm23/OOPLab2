@@ -1,5 +1,7 @@
-﻿using LabOOP2.Models;
-using Microsoft.AspNetCore.Http;
+﻿using LabOOP2.DAL;
+using LabOOP2.Domain;
+using LabOOP2.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -23,7 +25,7 @@ namespace LabOOP2.Controllers
         }
 
         [HttpGet("customers/{id}/bankAccount")]
-        public IActionResult GetBankAccount(int id)
+        public IActionResult GetBankAccount(Guid id)
         {
             var dbCustomer = _context.Customers.Where(p => p.Id == id)
                 .Include(p => p.BankAccount)
@@ -37,36 +39,52 @@ namespace LabOOP2.Controllers
             return Ok(dbCustomer.BankAccount);
         }
 
-        [HttpPost("customers/{id}/bankAccount/add")]
-        public IActionResult Create(int id, BankAccount bankAccount)
+        [HttpPost("customers/{id}/bankAccount")]
+        public IActionResult Create([FromRoute]Guid id, BankAccountInputModel bankAccountInputModel)
         {
-            var dbCustomer = _context.Customers.Where(p => p.Id == id)
+            var customer = _context.Customers.Where(p => p.Id == id)
                 .Include(p => p.BankAccount)
                 .FirstOrDefault();
 
-            if (dbCustomer is null)
+            if (customer is null)
             {
                 return NotFound();
             }
 
-            dbCustomer.BankAccount = bankAccount;
+            var bankAccount = new BankAccount(
+                Guid.NewGuid(),
+                bankAccountInputModel.CardNumber,
+                bankAccountInputModel.ExpiryDate,
+                bankAccountInputModel.CVV);
+
+            customer.SetBankAccount(bankAccount);
             _context.SaveChanges();
             return Ok();
         }
 
-        [HttpGet("customers/{id}/bankAccount/update")]
-        public IActionResult Update(int id, BankAccount bankAccount)
+        [HttpPut("customers/{id}/bankAccount")]
+        public IActionResult Update(Guid id, BankAccountInputModel bankAccountInputModel)
         {
-            var dbCustomer = _context.Customers.Where(p => p.Id == id)
+            var customer = _context.Customers.Where(p => p.Id == id)
                 .Include(p => p.BankAccount)
                 .FirstOrDefault();
 
-            if (dbCustomer is null || dbCustomer.BankAccount is null)
+            if (customer is null)
             {
                 return NotFound();
             }
+            else if (customer.BankAccount is null)
+            {
+                return BadRequest("Can not update item that is not existing");
+            }
 
-            _context.Update(bankAccount);
+            var bankAccount = new BankAccount(
+                Guid.NewGuid(),
+                bankAccountInputModel.CardNumber,
+                bankAccountInputModel.ExpiryDate,
+                bankAccountInputModel.CVV);
+
+            customer.SetBankAccount(bankAccount);
             _context.SaveChanges();
             return Ok();
         }

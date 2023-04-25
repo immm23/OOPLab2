@@ -1,5 +1,6 @@
-﻿using LabOOP2.Models;
-using Microsoft.AspNetCore.Http;
+﻿using LabOOP2.DAL;
+using LabOOP2.Domain;
+using LabOOP2.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -23,32 +24,67 @@ namespace LabOOP2.Controllers
         }
 
         [HttpGet("customers/{id}/passport")]
-        public IActionResult GetPassport(int id)
+        public IActionResult GetPassport(Guid id)
         {
-            var dbCustomer = _context.Customers.Where(p => p.Id == id)
+            var customer = _context.Customers.Where(p => p.Id == id)
                 .Include(p => p.Passport)
                 .FirstOrDefault();
 
-            if (dbCustomer is null)
+            if (customer is null)
             {
                 return NotFound();
             }
 
-            return Ok(dbCustomer.Passport);
+            return Ok(customer.Passport);
         }
 
-        [HttpPost("customers/{id}/passport/add")]
-        public IActionResult Create(int id, Passport passport)
+        [HttpPost("customers/{id}/passport")]
+        public IActionResult Create(Guid id, PassportInputModel passportInputModel)
         {
-            var dbCustomer = _context.Customers.Where(p => p.Id == id)
+            var customer = _context.Customers.Where(p => p.Id == id)
                .Include(p => p.Passport)
                .FirstOrDefault();
 
-            if (dbCustomer is null)
+            if (customer is null)
             {
                 return NotFound();
             }
-            dbCustomer.Passport = passport;
+
+            var passport = new Passport(
+                Guid.NewGuid(),
+                passportInputModel.SerialNumber,
+                passportInputModel.IssuedByAuthority,
+                passportInputModel.IssuedDate,
+                passportInputModel.ExpiryDate);
+
+            customer.SetPassport(passport);
+            _context.SaveChanges();
+            return Ok();
+        }
+
+        [HttpPut("customers/{id}/passport")]
+        public IActionResult Update(Guid id, PassportInputModel passportInputModel)
+        {
+            var customer = _context.Customers.Where(p => p.Id == id)
+               .Include(p => p.Passport)
+               .FirstOrDefault();
+
+            if (customer is null)
+            {
+                return NotFound();
+            }
+            else if (customer.Passport is null){
+                return BadRequest("Can not update passport which is not created");
+            }
+
+            var passport = new Passport(
+                passportInputModel.Id,
+                passportInputModel.SerialNumber,
+                passportInputModel.IssuedByAuthority,
+                passportInputModel.IssuedDate,
+                passportInputModel.ExpiryDate);
+
+            customer.SetPassport(passport);
             _context.SaveChanges();
             return Ok();
         }

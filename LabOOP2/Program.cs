@@ -1,6 +1,11 @@
 using LabOOP2;
+using LabOOP2.DAL;
+using LabOOP2.Domain.Services;
 using LabOOP2.Models;
+using LabOOP2.Services;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -9,11 +14,12 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(); 
 builder.Services.AddDbContext<Context>(option => option.UseSqlServer(
-    "Server=SCAT\\SQLEXPRESS; Database=fastHroshi; Trusted_Connection=True;MultipleActiveResultSets=true;trustServerCertificate=true"
-));
-builder.Services.AddAutoMapper(typeof(CustomerProfile));
+    builder.Configuration["DefaultConnection"]));
+builder.Services.AddScoped<IPaymentService, PaymentService>();
+builder.Services.AddScoped<ILoanRandomizer, LoanRandomizer>();
+
 var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
@@ -31,6 +37,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
